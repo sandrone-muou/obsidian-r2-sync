@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-r2-sync",
+  "name": "R2 Sync",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "通过 Cloudflare R2 实现 Obsidian 多端同步",
+  "author": "sandrone-muou",
+  "authorUrl": "https://github.com/sandrone-muou",
+  "isDesktopOnly": false
+}
