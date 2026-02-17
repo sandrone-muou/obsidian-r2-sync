@@ -20,6 +20,49 @@ const DEFAULT_SETTINGS: R2SyncSettings = {
     syncInterval: 5
 }
 
+const i18n = {
+    ribbonTitle: 'R2 Sync / R2 同步',
+    cmdUpload: 'Upload all files to R2 / 上传所有文件到 R2',
+    cmdDownload: 'Download all files from R2 / 从 R2 下载所有文件',
+    cmdSync: 'Bidirectional sync / 双向同步',
+    configFirst: 'Please configure R2 storage settings first / 请先配置 R2 存储信息',
+    syncFolderNotExist: 'Sync folder does not exist / 同步文件夹不存在',
+    connSuccess: (count: number) => `Connection successful! ${count} .md files in bucket / 连接成功！存储桶中有 ${count} 个 .md 文件`,
+    connFailed: (msg: string) => `Connection failed: ${msg} / 连接失败: ${msg}`,
+    uploadComplete: (ok: number, fail: number) => `Upload complete: ${ok} succeeded, ${fail} failed / 上传完成: ${ok} 个成功, ${fail} 个失败`,
+    downloadComplete: (ok: number, fail: number) => `Download complete: ${ok} succeeded, ${fail} failed / 下载完成: ${ok} 个成功, ${fail} 个失败`,
+    syncComplete: (up: number, down: number, fail: number) => `Sync complete: ${up} uploaded, ${down} downloaded, ${fail} failed / 同步完成: 上传 ${up} 个, 下载 ${down} 个, ${fail} 个失败`,
+    syncFailed: (msg: string) => `Sync failed: ${msg} / 同步失败: ${msg}`,
+    downloadFailed: (msg: string) => `Download failed: ${msg} / 下载失败: ${msg}`,
+    uploadFailed: (msg: string) => `Upload failed: ${msg} / 上传失败: ${msg}`,
+    listFailed: (msg: string) => `List files failed: ${msg} / 列出文件失败: ${msg}`,
+    errorDetails: 'Error details / 错误详情',
+    moreErrors: (count: number) => `...and ${count} more errors / ...还有 ${count} 个错误`,
+    settingsTitle: 'R2 Sync Settings / R2 同步设置',
+    bucketName: 'Bucket Name / 存储桶名称',
+    bucketNameDesc: 'Cloudflare R2 bucket name / Cloudflare R2 存储桶名称',
+    apiEndpoint: 'API Endpoint / API 端点',
+    apiEndpointDesc: 'Format: https://<account_id>.r2.cloudflarestorage.com / 格式: https://<account_id>.r2.cloudflarestorage.com',
+    accessKeyId: 'Access Key ID / 访问密钥 ID',
+    accessKeyIdDesc: 'R2 API access key ID / R2 API 访问密钥 ID',
+    secretKey: 'Secret Access Key / 访问密钥',
+    secretKeyDesc: 'R2 API secret access key / R2 API 访问密钥',
+    syncFolder: 'Sync Folder / 同步文件夹',
+    syncFolderDesc: 'Leave empty to sync entire vault / 留空则同步整个仓库',
+    autoSync: 'Auto Sync / 自动同步',
+    autoSyncDesc: 'Enable automatic sync / 启用自动同步',
+    syncInterval: 'Sync Interval / 同步间隔',
+    syncIntervalDesc: 'Auto sync interval in minutes / 自动同步间隔（分钟）',
+    testConn: 'Test Connection / 测试连接',
+    testConnDesc: 'Test R2 connection / 测试 R2 连接',
+    testConnBtn: 'Test Connection / 测试连接',
+    manualSync: 'Manual Sync / 手动同步',
+    manualSyncDesc: 'Manually trigger sync operations / 手动触发同步操作',
+    uploadAllBtn: 'Upload All / 上传全部',
+    downloadAllBtn: 'Download All / 下载全部',
+    syncBtn: 'Sync / 同步'
+};
+
 export default class R2SyncPlugin extends Plugin {
     settings: R2SyncSettings;
     syncIntervalId: number | null = null;
@@ -33,7 +76,7 @@ export default class R2SyncPlugin extends Plugin {
             this.startAutoSync();
         }
         
-        this.addRibbonIcon('cloud', 'R2 同步', () => {
+        this.addRibbonIcon('cloud', i18n.ribbonTitle, () => {
             this.sync();
         });
     }
@@ -53,19 +96,19 @@ export default class R2SyncPlugin extends Plugin {
     addCommands() {
         this.addCommand({
             id: 'r2-sync-upload',
-            name: '上传所有文件到 R2',
+            name: i18n.cmdUpload,
             callback: () => this.uploadAll()
         });
 
         this.addCommand({
             id: 'r2-sync-download',
-            name: '从 R2 下载所有文件',
+            name: i18n.cmdDownload,
             callback: () => this.downloadAll()
         });
 
         this.addCommand({
             id: 'r2-sync',
-            name: '双向同步',
+            name: i18n.cmdSync,
             callback: () => this.sync()
         });
     }
@@ -115,28 +158,28 @@ export default class R2SyncPlugin extends Plugin {
 
     async testConnection(): Promise<void> {
         if (!this.isConfigured()) {
-            new Notice('请先配置 R2 存储信息');
+            new Notice(i18n.configFirst);
             return;
         }
 
         try {
             const files = await this.listR2Files();
-            new Notice(`连接成功！存储桶中有 ${files.length} 个 .md 文件`, 5000);
+            new Notice(i18n.connSuccess(files.length), 5000);
         } catch (e) {
             const errorMsg = e instanceof Error ? e.message : String(e);
-            new Notice(`连接失败: ${errorMsg}`, 10000);
+            new Notice(i18n.connFailed(errorMsg), 10000);
         }
     }
 
     async uploadAll() {
         if (!this.isConfigured()) {
-            new Notice('请先配置 R2 存储信息');
+            new Notice(i18n.configFirst);
             return;
         }
 
         const folder = this.getSyncFolder();
         if (!folder) {
-            new Notice('同步文件夹不存在');
+            new Notice(i18n.syncFolderNotExist);
             return;
         }
 
@@ -153,16 +196,15 @@ export default class R2SyncPlugin extends Plugin {
             } catch (e) {
                 const errorMsg = e instanceof Error ? e.message : String(e);
                 errors.push(`${file.path}: ${errorMsg}`);
-                console.error(`上传失败: ${file.path}`, e);
             }
         }
 
         const failed = errors.length;
-        let message = `上传完成: ${uploaded} 个成功, ${failed} 个失败`;
+        let message = i18n.uploadComplete(uploaded, failed);
         if (errors.length > 0) {
-            message += `\n\n错误详情:\n${errors.slice(0, 5).join('\n')}`;
+            message += `\n\n${i18n.errorDetails}:\n${errors.slice(0, 5).join('\n')}`;
             if (errors.length > 5) {
-                message += `\n...还有 ${errors.length - 5} 个错误`;
+                message += `\n${i18n.moreErrors(errors.length - 5)}`;
             }
         }
         new Notice(message, 10000);
@@ -170,7 +212,7 @@ export default class R2SyncPlugin extends Plugin {
 
     async downloadAll() {
         if (!this.isConfigured()) {
-            new Notice('请先配置 R2 存储信息');
+            new Notice(i18n.configFirst);
             return;
         }
 
@@ -188,28 +230,27 @@ export default class R2SyncPlugin extends Plugin {
                 } catch (e) {
                     const errorMsg = e instanceof Error ? e.message : String(e);
                     errors.push(`${key}: ${errorMsg}`);
-                    console.error(`下载失败: ${key}`, e);
                 }
             }
 
             const failed = errors.length;
-            let message = `下载完成: ${downloaded} 个成功, ${failed} 个失败`;
+            let message = i18n.downloadComplete(downloaded, failed);
             if (errors.length > 0) {
-                message += `\n\n错误详情:\n${errors.slice(0, 5).join('\n')}`;
+                message += `\n\n${i18n.errorDetails}:\n${errors.slice(0, 5).join('\n')}`;
                 if (errors.length > 5) {
-                    message += `\n...还有 ${errors.length - 5} 个错误`;
+                    message += `\n${i18n.moreErrors(errors.length - 5)}`;
                 }
             }
             new Notice(message, 10000);
         } catch (e) {
             const errorMsg = e instanceof Error ? e.message : String(e);
-            new Notice('下载失败: ' + errorMsg, 10000);
+            new Notice(i18n.downloadFailed(errorMsg), 10000);
         }
     }
 
     async sync() {
         if (!this.isConfigured()) {
-            new Notice('请先配置 R2 存储信息');
+            new Notice(i18n.configFirst);
             return;
         }
 
@@ -233,7 +274,7 @@ export default class R2SyncPlugin extends Plugin {
                         uploaded++;
                     } catch (e) {
                         const errorMsg = e instanceof Error ? e.message : String(e);
-                        errors.push(`上传 ${relativePath}: ${errorMsg}`);
+                        errors.push(`Upload ${relativePath}: ${errorMsg}`);
                     }
                 }
             }
@@ -246,23 +287,22 @@ export default class R2SyncPlugin extends Plugin {
                         downloaded++;
                     } catch (e) {
                         const errorMsg = e instanceof Error ? e.message : String(e);
-                        errors.push(`下载 ${key}: ${errorMsg}`);
+                        errors.push(`Download ${key}: ${errorMsg}`);
                     }
                 }
             }
 
-            let message = `同步完成: 上传 ${uploaded} 个, 下载 ${downloaded} 个`;
+            let message = i18n.syncComplete(uploaded, downloaded, errors.length);
             if (errors.length > 0) {
-                message += `, ${errors.length} 个失败`;
-                message += `\n\n错误详情:\n${errors.slice(0, 5).join('\n')}`;
+                message += `\n\n${i18n.errorDetails}:\n${errors.slice(0, 5).join('\n')}`;
                 if (errors.length > 5) {
-                    message += `\n...还有 ${errors.length - 5} 个错误`;
+                    message += `\n${i18n.moreErrors(errors.length - 5)}`;
                 }
             }
             new Notice(message, 10000);
         } catch (e) {
             const errorMsg = e instanceof Error ? e.message : String(e);
-            new Notice('同步失败: ' + errorMsg, 10000);
+            new Notice(i18n.syncFailed(errorMsg), 10000);
         }
     }
 
@@ -408,11 +448,11 @@ export default class R2SyncPlugin extends Plugin {
             });
 
             if (response.status < 200 || response.status >= 300) {
-                throw new Error(`上传失败: ${response.status} - ${response.text}`);
+                throw new Error(i18n.uploadFailed(`${response.status} - ${response.text}`));
             }
         } catch (e) {
             if (e instanceof Error) throw e;
-            throw new Error(`上传失败: ${String(e)}`);
+            throw new Error(i18n.uploadFailed(String(e)));
         }
     }
 
@@ -427,13 +467,13 @@ export default class R2SyncPlugin extends Plugin {
             });
 
             if (response.status < 200 || response.status >= 300) {
-                throw new Error(`下载失败: ${response.status} - ${response.text}`);
+                throw new Error(i18n.downloadFailed(`${response.status} - ${response.text}`));
             }
 
             return response.text;
         } catch (e) {
             if (e instanceof Error) throw e;
-            throw new Error(`下载失败: ${String(e)}`);
+            throw new Error(i18n.downloadFailed(String(e)));
         }
     }
 
@@ -488,7 +528,7 @@ export default class R2SyncPlugin extends Plugin {
             });
 
             if (response.status < 200 || response.status >= 300) {
-                throw new Error(`列出文件失败: ${response.status} - ${response.text}`);
+                throw new Error(i18n.listFailed(`${response.status} - ${response.text}`));
             }
 
             const xml = response.text;
@@ -503,7 +543,7 @@ export default class R2SyncPlugin extends Plugin {
             return keys;
         } catch (e) {
             if (e instanceof Error) throw e;
-            throw new Error(`列出文件失败: ${String(e)}`);
+            throw new Error(i18n.listFailed(String(e)));
         }
     }
 }
@@ -520,11 +560,11 @@ class R2SyncSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: 'R2 同步设置' });
+        containerEl.createEl('h2', { text: i18n.settingsTitle });
 
         new Setting(containerEl)
-            .setName('存储桶名称')
-            .setDesc('Cloudflare R2 存储桶名称')
+            .setName(i18n.bucketName)
+            .setDesc(i18n.bucketNameDesc)
             .addText(text => text
                 .setPlaceholder('my-bucket')
                 .setValue(this.plugin.settings.bucketName)
@@ -534,8 +574,8 @@ class R2SyncSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('API 端点')
-            .setDesc('格式: https://<account_id>.r2.cloudflarestorage.com')
+            .setName(i18n.apiEndpoint)
+            .setDesc(i18n.apiEndpointDesc)
             .addText(text => text
                 .setPlaceholder('https://xxx.r2.cloudflarestorage.com')
                 .setValue(this.plugin.settings.endpoint)
@@ -545,8 +585,8 @@ class R2SyncSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('Access Key ID')
-            .setDesc('R2 API 访问密钥 ID')
+            .setName(i18n.accessKeyId)
+            .setDesc(i18n.accessKeyIdDesc)
             .addText(text => text
                 .setValue(this.plugin.settings.accessKeyId)
                 .onChange(async (value) => {
@@ -555,8 +595,8 @@ class R2SyncSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('Secret Access Key')
-            .setDesc('R2 API 访问密钥')
+            .setName(i18n.secretKey)
+            .setDesc(i18n.secretKeyDesc)
             .addText(text => text
                 .setValue(this.plugin.settings.secretAccessKey)
                 .onChange(async (value) => {
@@ -565,8 +605,8 @@ class R2SyncSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('同步文件夹')
-            .setDesc('留空则同步整个仓库')
+            .setName(i18n.syncFolder)
+            .setDesc(i18n.syncFolderDesc)
             .addText(text => text
                 .setPlaceholder('Notes')
                 .setValue(this.plugin.settings.syncFolder)
@@ -576,8 +616,8 @@ class R2SyncSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('自动同步')
-            .setDesc('启用后自动同步')
+            .setName(i18n.autoSync)
+            .setDesc(i18n.autoSyncDesc)
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.autoSync)
                 .onChange(async (value) => {
@@ -591,45 +631,47 @@ class R2SyncSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('同步间隔')
-            .setDesc('自动同步间隔（分钟）')
-            .addSlider(slider => slider
-                .setLimits(1, 60, 1)
-                .setValue(this.plugin.settings.syncInterval)
-                .setDynamicTooltip()
+            .setName(i18n.syncInterval)
+            .setDesc(i18n.syncIntervalDesc)
+            .addText(text => text
+                .setValue(String(this.plugin.settings.syncInterval))
                 .onChange(async (value) => {
-                    this.plugin.settings.syncInterval = value;
-                    await this.plugin.saveSettings();
+                    const num = parseInt(value);
+                    if (!isNaN(num) && num > 0) {
+                        this.plugin.settings.syncInterval = num;
+                        await this.plugin.saveSettings();
+                        if (this.plugin.settings.autoSync) {
+                            this.plugin.startAutoSync();
+                        }
+                    }
                 }));
 
-        containerEl.createEl('h3', { text: '手动操作' });
+        new Setting(containerEl)
+            .setName(i18n.testConn)
+            .setDesc(i18n.testConnDesc)
+            .addButton(btn => btn
+                .setButtonText(i18n.testConnBtn)
+                .onClick(() => {
+                    this.plugin.testConnection();
+                }));
 
         new Setting(containerEl)
-            .setName('测试连接')
-            .setDesc('测试 R2 连接是否正常')
-            .addButton(button => button
-                .setButtonText('测试')
-                .onClick(() => this.plugin.testConnection()));
-
-        new Setting(containerEl)
-            .setName('上传所有文件')
-            .setDesc('将本地文件上传到 R2')
-            .addButton(button => button
-                .setButtonText('上传')
-                .onClick(() => this.plugin.uploadAll()));
-
-        new Setting(containerEl)
-            .setName('下载所有文件')
-            .setDesc('从 R2 下载文件到本地')
-            .addButton(button => button
-                .setButtonText('下载')
-                .onClick(() => this.plugin.downloadAll()));
-
-        new Setting(containerEl)
-            .setName('双向同步')
-            .setDesc('同步本地和远程差异')
-            .addButton(button => button
-                .setButtonText('同步')
-                .onClick(() => this.plugin.sync()));
+            .setName(i18n.manualSync)
+            .setDesc(i18n.manualSyncDesc)
+            .addButton(btn => btn
+                .setButtonText(i18n.uploadAllBtn)
+                .onClick(() => {
+                    this.plugin.uploadAll();
+                }))
+            .addButton(btn => btn
+                .setButtonText(i18n.downloadAllBtn)
+                .onClick(() => {
+                    this.plugin.downloadAll();
+                }))
+            .addButton(btn => btn
+                .setButtonText(i18n.syncBtn)
+                .onClick(() => {
+                    this.plugin.sync();
+                }));
     }
 }
