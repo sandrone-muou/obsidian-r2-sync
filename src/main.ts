@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS: R2SyncSettings = {
 }
 
 const i18n = {
-    ribbonTitle: 'R2 Sync / R2 同步',
+    ribbonTitle: 'R2 sync / R2 同步',
     cmdUpload: 'Upload all files to R2 / 上传所有文件到 R2',
     cmdDownload: 'Download all files from R2 / 从 R2 下载所有文件',
     cmdSync: 'Bidirectional sync / 双向同步',
@@ -38,28 +38,28 @@ const i18n = {
     listFailed: (msg: string) => `List files failed: ${msg} / 列出文件失败: ${msg}`,
     errorDetails: 'Error details / 错误详情',
     moreErrors: (count: number) => `...and ${count} more errors / ...还有 ${count} 个错误`,
-    settingsTitle: 'R2 Sync Settings / R2 同步设置',
-    bucketName: 'Bucket Name / 存储桶名称',
+    settingsTitle: 'R2 sync / R2 同步',
+    bucketName: 'Bucket name / 存储桶名称',
     bucketNameDesc: 'Cloudflare R2 bucket name / Cloudflare R2 存储桶名称',
-    apiEndpoint: 'API Endpoint / API 端点',
+    apiEndpoint: 'API endpoint / API 端点',
     apiEndpointDesc: 'Format: https://<account_id>.r2.cloudflarestorage.com / 格式: https://<account_id>.r2.cloudflarestorage.com',
-    accessKeyId: 'Access Key ID / 访问密钥 ID',
+    accessKeyId: 'Access key ID / 访问密钥 ID',
     accessKeyIdDesc: 'R2 API access key ID / R2 API 访问密钥 ID',
-    secretKey: 'Secret Access Key / 访问密钥',
+    secretKey: 'Secret access key / 访问密钥',
     secretKeyDesc: 'R2 API secret access key / R2 API 访问密钥',
-    syncFolder: 'Sync Folder / 同步文件夹',
+    syncFolder: 'Sync folder / 同步文件夹',
     syncFolderDesc: 'Leave empty to sync entire vault / 留空则同步整个仓库',
-    autoSync: 'Auto Sync / 自动同步',
+    autoSync: 'Auto sync / 自动同步',
     autoSyncDesc: 'Enable automatic sync / 启用自动同步',
-    syncInterval: 'Sync Interval / 同步间隔',
+    syncInterval: 'Sync interval / 同步间隔',
     syncIntervalDesc: 'Auto sync interval in minutes / 自动同步间隔（分钟）',
-    testConn: 'Test Connection / 测试连接',
+    testConn: 'Test connection / 测试连接',
     testConnDesc: 'Test R2 connection / 测试 R2 连接',
-    testConnBtn: 'Test Connection / 测试连接',
-    manualSync: 'Manual Sync / 手动同步',
+    testConnBtn: 'Test connection / 测试连接',
+    manualSync: 'Manual sync / 手动同步',
     manualSyncDesc: 'Manually trigger sync operations / 手动触发同步操作',
-    uploadAllBtn: 'Upload All / 上传全部',
-    downloadAllBtn: 'Download All / 下载全部',
+    uploadAllBtn: 'Upload all / 上传全部',
+    downloadAllBtn: 'Download all / 下载全部',
     syncBtn: 'Sync / 同步'
 };
 
@@ -77,7 +77,7 @@ export default class R2SyncPlugin extends Plugin {
         }
         
         this.addRibbonIcon('cloud', i18n.ribbonTitle, () => {
-            this.sync();
+            void this.sync();
         });
     }
 
@@ -95,19 +95,19 @@ export default class R2SyncPlugin extends Plugin {
 
     addCommands() {
         this.addCommand({
-            id: 'r2-sync-upload',
+            id: 'upload',
             name: i18n.cmdUpload,
             callback: () => this.uploadAll()
         });
 
         this.addCommand({
-            id: 'r2-sync-download',
+            id: 'download',
             name: i18n.cmdDownload,
             callback: () => this.downloadAll()
         });
 
         this.addCommand({
-            id: 'r2-sync',
+            id: 'sync',
             name: i18n.cmdSync,
             callback: () => this.sync()
         });
@@ -117,7 +117,7 @@ export default class R2SyncPlugin extends Plugin {
         this.stopAutoSync();
         const intervalMs = this.settings.syncInterval * 60 * 1000;
         this.syncIntervalId = window.setInterval(() => {
-            this.sync();
+            void this.sync();
         }, intervalMs);
     }
 
@@ -560,7 +560,9 @@ class R2SyncSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: i18n.settingsTitle });
+        new Setting(containerEl)
+            .setName(i18n.settingsTitle)
+            .setHeading();
 
         new Setting(containerEl)
             .setName(i18n.bucketName)
