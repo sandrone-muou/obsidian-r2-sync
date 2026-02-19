@@ -1,5 +1,7 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice, TFile, TFolder, requestUrl } from 'obsidian';
 
+type Language = 'en' | 'zh';
+
 interface R2SyncSettings {
     bucketName: string;
     endpoint: string;
@@ -8,6 +10,7 @@ interface R2SyncSettings {
     syncFolder: string;
     autoSync: boolean;
     syncInterval: number;
+    language: Language;
 }
 
 const DEFAULT_SETTINGS: R2SyncSettings = {
@@ -17,51 +20,109 @@ const DEFAULT_SETTINGS: R2SyncSettings = {
     secretAccessKey: '',
     syncFolder: '',
     autoSync: false,
-    syncInterval: 5
+    syncInterval: 5,
+    language: 'en'
 }
 
-const i18n = {
-    ribbonTitle: 'R2 sync / R2 同步',
-    cmdUpload: 'Upload all files to R2 / 上传所有文件到 R2',
-    cmdDownload: 'Download all files from R2 / 从 R2 下载所有文件',
-    cmdSync: 'Bidirectional sync / 双向同步',
-    configFirst: 'Please configure R2 storage settings first / 请先配置 R2 存储信息',
-    syncFolderNotExist: 'Sync folder does not exist / 同步文件夹不存在',
-    connSuccess: (count: number) => `Connection successful! ${count} .md files in bucket / 连接成功！存储桶中有 ${count} 个 .md 文件`,
-    connFailed: (msg: string) => `Connection failed: ${msg} / 连接失败: ${msg}`,
-    uploadComplete: (ok: number, fail: number) => `Upload complete: ${ok} succeeded, ${fail} failed / 上传完成: ${ok} 个成功, ${fail} 个失败`,
-    downloadComplete: (ok: number, fail: number) => `Download complete: ${ok} succeeded, ${fail} failed / 下载完成: ${ok} 个成功, ${fail} 个失败`,
-    syncComplete: (up: number, down: number, fail: number) => `Sync complete: ${up} uploaded, ${down} downloaded, ${fail} failed / 同步完成: 上传 ${up} 个, 下载 ${down} 个, ${fail} 个失败`,
-    syncFailed: (msg: string) => `Sync failed: ${msg} / 同步失败: ${msg}`,
-    downloadFailed: (msg: string) => `Download failed: ${msg} / 下载失败: ${msg}`,
-    uploadFailed: (msg: string) => `Upload failed: ${msg} / 上传失败: ${msg}`,
-    listFailed: (msg: string) => `List files failed: ${msg} / 列出文件失败: ${msg}`,
-    errorDetails: 'Error details / 错误详情',
-    moreErrors: (count: number) => `...and ${count} more errors / ...还有 ${count} 个错误`,
-    settingsTitle: 'R2 sync / R2 同步',
-    bucketName: 'Bucket name / 存储桶名称',
-    bucketNameDesc: 'Cloudflare R2 bucket name / Cloudflare R2 存储桶名称',
-    apiEndpoint: 'API endpoint / API 端点',
-    apiEndpointDesc: 'Format: https://<account_id>.r2.cloudflarestorage.com / 格式: https://<account_id>.r2.cloudflarestorage.com',
-    accessKeyId: 'Access key ID / 访问密钥 ID',
-    accessKeyIdDesc: 'R2 API access key ID / R2 API 访问密钥 ID',
-    secretKey: 'Secret access key / 访问密钥',
-    secretKeyDesc: 'R2 API secret access key / R2 API 访问密钥',
-    syncFolder: 'Sync folder / 同步文件夹',
-    syncFolderDesc: 'Leave empty to sync entire vault / 留空则同步整个仓库',
-    autoSync: 'Auto sync / 自动同步',
-    autoSyncDesc: 'Enable automatic sync / 启用自动同步',
-    syncInterval: 'Sync interval / 同步间隔',
-    syncIntervalDesc: 'Auto sync interval in minutes / 自动同步间隔（分钟）',
-    testConn: 'Test connection / 测试连接',
-    testConnDesc: 'Test R2 connection / 测试 R2 连接',
-    testConnBtn: 'Test connection / 测试连接',
-    manualSync: 'Manual sync / 手动同步',
-    manualSyncDesc: 'Manually trigger sync operations / 手动触发同步操作',
-    uploadAllBtn: 'Upload all / 上传全部',
-    downloadAllBtn: 'Download all / 下载全部',
-    syncBtn: 'Sync / 同步'
+const en = {
+    ribbonTitle: 'R2 sync',
+    cmdUpload: 'Upload all files to R2',
+    cmdDownload: 'Download all files from R2',
+    cmdSync: 'Bidirectional sync',
+    configFirst: 'Please configure R2 storage settings first',
+    syncFolderNotExist: 'Sync folder does not exist',
+    connSuccess: (count: number) => `Connection successful! ${count} .md files in bucket`,
+    connFailed: (msg: string) => `Connection failed: ${msg}`,
+    uploadComplete: (ok: number, fail: number) => `Upload complete: ${ok} succeeded, ${fail} failed`,
+    downloadComplete: (ok: number, fail: number) => `Download complete: ${ok} succeeded, ${fail} failed`,
+    syncComplete: (up: number, down: number, fail: number) => `Sync complete: ${up} uploaded, ${down} downloaded, ${fail} failed`,
+    syncFailed: (msg: string) => `Sync failed: ${msg}`,
+    downloadFailed: (msg: string) => `Download failed: ${msg}`,
+    uploadFailed: (msg: string) => `Upload failed: ${msg}`,
+    listFailed: (msg: string) => `List files failed: ${msg}`,
+    errorDetails: 'Error details',
+    moreErrors: (count: number) => `...and ${count} more errors`,
+    settingsTitle: 'R2 sync',
+    bucketName: 'Bucket name',
+    bucketNameDesc: 'Cloudflare R2 bucket name',
+    apiEndpoint: 'API endpoint',
+    apiEndpointDesc: 'Format: https://<account_id>.r2.cloudflarestorage.com',
+    accessKeyId: 'Access key ID',
+    accessKeyIdDesc: 'R2 API access key ID',
+    secretKey: 'Secret access key',
+    secretKeyDesc: 'R2 API secret access key',
+    syncFolder: 'Sync folder',
+    syncFolderDesc: 'Leave empty to sync entire vault',
+    autoSync: 'Auto sync',
+    autoSyncDesc: 'Enable automatic sync',
+    syncInterval: 'Sync interval',
+    syncIntervalDesc: 'Auto sync interval in minutes',
+    testConn: 'Test connection',
+    testConnDesc: 'Test R2 connection',
+    testConnBtn: 'Test connection',
+    manualSync: 'Manual sync',
+    manualSyncDesc: 'Manually trigger sync operations',
+    uploadAllBtn: 'Upload all',
+    downloadAllBtn: 'Download all',
+    syncBtn: 'Sync',
+    language: 'Language',
+    languageDesc: 'Interface language',
+    languageEn: 'English',
+    languageZh: 'Chinese'
 };
+
+const zh = {
+    ribbonTitle: 'R2 同步',
+    cmdUpload: '上传所有文件到 R2',
+    cmdDownload: '从 R2 下载所有文件',
+    cmdSync: '双向同步',
+    configFirst: '请先配置 R2 存储信息',
+    syncFolderNotExist: '同步文件夹不存在',
+    connSuccess: (count: number) => `连接成功！存储桶中有 ${count} 个 .md 文件`,
+    connFailed: (msg: string) => `连接失败: ${msg}`,
+    uploadComplete: (ok: number, fail: number) => `上传完成: ${ok} 个成功, ${fail} 个失败`,
+    downloadComplete: (ok: number, fail: number) => `下载完成: ${ok} 个成功, ${fail} 个失败`,
+    syncComplete: (up: number, down: number, fail: number) => `同步完成: 上传 ${up} 个, 下载 ${down} 个, ${fail} 个失败`,
+    syncFailed: (msg: string) => `同步失败: ${msg}`,
+    downloadFailed: (msg: string) => `下载失败: ${msg}`,
+    uploadFailed: (msg: string) => `上传失败: ${msg}`,
+    listFailed: (msg: string) => `列出文件失败: ${msg}`,
+    errorDetails: '错误详情',
+    moreErrors: (count: number) => `...还有 ${count} 个错误`,
+    settingsTitle: 'R2 同步',
+    bucketName: '存储桶名称',
+    bucketNameDesc: 'Cloudflare R2 存储桶名称',
+    apiEndpoint: 'API 端点',
+    apiEndpointDesc: '格式: https://<account_id>.r2.cloudflarestorage.com',
+    accessKeyId: '访问密钥 ID',
+    accessKeyIdDesc: 'R2 API 访问密钥 ID',
+    secretKey: '访问密钥',
+    secretKeyDesc: 'R2 API 访问密钥',
+    syncFolder: '同步文件夹',
+    syncFolderDesc: '留空则同步整个仓库',
+    autoSync: '自动同步',
+    autoSyncDesc: '启用自动同步',
+    syncInterval: '同步间隔',
+    syncIntervalDesc: '自动同步间隔（分钟）',
+    testConn: '测试连接',
+    testConnDesc: '测试 R2 连接',
+    testConnBtn: '测试连接',
+    manualSync: '手动同步',
+    manualSyncDesc: '手动触发同步操作',
+    uploadAllBtn: '上传全部',
+    downloadAllBtn: '下载全部',
+    syncBtn: '同步',
+    language: '语言',
+    languageDesc: '界面语言',
+    languageEn: '英文',
+    languageZh: '中文'
+};
+
+const translations = { en, zh };
+
+function t(lang: Language) {
+    return translations[lang];
+}
 
 export default class R2SyncPlugin extends Plugin {
     settings: R2SyncSettings;
@@ -76,7 +137,7 @@ export default class R2SyncPlugin extends Plugin {
             this.startAutoSync();
         }
         
-        this.addRibbonIcon('cloud', i18n.ribbonTitle, () => {
+        this.addRibbonIcon('cloud', t(this.settings.language).ribbonTitle, () => {
             void this.sync();
         });
     }
@@ -86,7 +147,7 @@ export default class R2SyncPlugin extends Plugin {
     }
 
     async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<R2SyncSettings>);
     }
 
     async saveSettings() {
@@ -94,22 +155,29 @@ export default class R2SyncPlugin extends Plugin {
     }
 
     addCommands() {
+        const i18n = t(this.settings.language);
         this.addCommand({
             id: 'upload',
             name: i18n.cmdUpload,
-            callback: () => this.uploadAll()
+            callback: () => {
+                void this.uploadAll();
+            }
         });
 
         this.addCommand({
             id: 'download',
             name: i18n.cmdDownload,
-            callback: () => this.downloadAll()
+            callback: () => {
+                void this.downloadAll();
+            }
         });
 
         this.addCommand({
             id: 'sync',
             name: i18n.cmdSync,
-            callback: () => this.sync()
+            callback: () => {
+                void this.sync();
+            }
         });
     }
 
@@ -157,6 +225,7 @@ export default class R2SyncPlugin extends Plugin {
     }
 
     async testConnection(): Promise<void> {
+        const i18n = t(this.settings.language);
         if (!this.isConfigured()) {
             new Notice(i18n.configFirst);
             return;
@@ -172,6 +241,7 @@ export default class R2SyncPlugin extends Plugin {
     }
 
     async uploadAll() {
+        const i18n = t(this.settings.language);
         if (!this.isConfigured()) {
             new Notice(i18n.configFirst);
             return;
@@ -211,6 +281,7 @@ export default class R2SyncPlugin extends Plugin {
     }
 
     async downloadAll() {
+        const i18n = t(this.settings.language);
         if (!this.isConfigured()) {
             new Notice(i18n.configFirst);
             return;
@@ -249,6 +320,7 @@ export default class R2SyncPlugin extends Plugin {
     }
 
     async sync() {
+        const i18n = t(this.settings.language);
         if (!this.isConfigured()) {
             new Notice(i18n.configFirst);
             return;
@@ -434,6 +506,7 @@ export default class R2SyncPlugin extends Plugin {
     }
 
     async uploadToR2(key: string, content: string): Promise<void> {
+        const i18n = t(this.settings.language);
         const { url, headers } = await this.createSignature('PUT', key, content);
         
         try {
@@ -457,6 +530,7 @@ export default class R2SyncPlugin extends Plugin {
     }
 
     async downloadFromR2(key: string): Promise<string> {
+        const i18n = t(this.settings.language);
         const { url, headers } = await this.createSignature('GET', key, '');
         
         try {
@@ -478,6 +552,7 @@ export default class R2SyncPlugin extends Plugin {
     }
 
     async listR2Files(): Promise<string[]> {
+        const i18n = t(this.settings.language);
         const host = this.getEndpointHost();
         const bucket = this.settings.bucketName;
         const baseUrl = this.getBaseUrl();
@@ -560,15 +635,30 @@ class R2SyncSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
+        const i18n = t(this.plugin.settings.language);
+
         new Setting(containerEl)
             .setName(i18n.settingsTitle)
             .setHeading();
 
         new Setting(containerEl)
+            .setName(i18n.language)
+            .setDesc(i18n.languageDesc)
+            .addDropdown(dropdown => dropdown
+                .addOption('en', i18n.languageEn)
+                .addOption('zh', i18n.languageZh)
+                .setValue(this.plugin.settings.language)
+                .onChange(async (value: Language) => {
+                    this.plugin.settings.language = value;
+                    await this.plugin.saveSettings();
+                    this.display();
+                }));
+
+        new Setting(containerEl)
             .setName(i18n.bucketName)
             .setDesc(i18n.bucketNameDesc)
             .addText(text => text
-                .setPlaceholder('my-bucket')
+                .setPlaceholder('My bucket')
                 .setValue(this.plugin.settings.bucketName)
                 .onChange(async (value) => {
                     this.plugin.settings.bucketName = value;
@@ -654,7 +744,7 @@ class R2SyncSettingTab extends PluginSettingTab {
             .addButton(btn => btn
                 .setButtonText(i18n.testConnBtn)
                 .onClick(() => {
-                    this.plugin.testConnection();
+                    void this.plugin.testConnection();
                 }));
 
         new Setting(containerEl)
@@ -663,17 +753,17 @@ class R2SyncSettingTab extends PluginSettingTab {
             .addButton(btn => btn
                 .setButtonText(i18n.uploadAllBtn)
                 .onClick(() => {
-                    this.plugin.uploadAll();
+                    void this.plugin.uploadAll();
                 }))
             .addButton(btn => btn
                 .setButtonText(i18n.downloadAllBtn)
                 .onClick(() => {
-                    this.plugin.downloadAll();
+                    void this.plugin.downloadAll();
                 }))
             .addButton(btn => btn
                 .setButtonText(i18n.syncBtn)
                 .onClick(() => {
-                    this.plugin.sync();
+                    void this.plugin.sync();
                 }));
     }
 }
