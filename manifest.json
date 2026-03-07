@@ -1,7 +1,7 @@
 {
   "id": "r2-sync",
   "name": "R2 Sync",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minAppVersion": "1.0.0",
   "description": "Multi-device sync using Cloudflare R2 storage.",
   "author": "sandrone-muou",

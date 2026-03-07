@@ -1,6 +1,9 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice, TFile, TFolder, requestUrl } from 'obsidian';
 
 type Language = 'en' | 'zh';
+type SyncStrategy = 'bidirectional' | 'upload-only' | 'download-only' | 'local-first' | 'remote-first';
+
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'];
 
 interface R2SyncSettings {
     bucketName: string;
@@ -11,6 +14,10 @@ interface R2SyncSettings {
     autoSync: boolean;
     syncInterval: number;
     language: Language;
+    syncedFiles: string[];
+    syncOnSave: boolean;
+    syncStrategy: SyncStrategy;
+    syncImages: boolean;
 }
 
 const DEFAULT_SETTINGS: R2SyncSettings = {
@@ -21,7 +28,11 @@ const DEFAULT_SETTINGS: R2SyncSettings = {
     syncFolder: '',
     autoSync: false,
     syncInterval: 5,
-    language: 'en'
+    language: 'en',
+    syncedFiles: [],
+    syncOnSave: false,
+    syncStrategy: 'bidirectional',
+    syncImages: false
 }
 
 const en = {
@@ -33,13 +44,17 @@ const en = {
     syncFolderNotExist: 'Sync folder does not exist',
     connSuccess: (count: number) => `Connection successful! ${count} .md files in bucket`,
     connFailed: (msg: string) => `Connection failed: ${msg}`,
+    uploading: 'Uploading files to R2...',
+    downloading: 'Downloading files from R2...',
+    syncing: 'Syncing files...',
     uploadComplete: (ok: number, fail: number) => `Upload complete: ${ok} succeeded, ${fail} failed`,
     downloadComplete: (ok: number, fail: number) => `Download complete: ${ok} succeeded, ${fail} failed`,
-    syncComplete: (up: number, down: number, fail: number) => `Sync complete: ${up} uploaded, ${down} downloaded, ${fail} failed`,
+    syncComplete: (up: number, down: number, del: number, fail: number) => `Sync complete: ${up} uploaded, ${down} downloaded, ${del} deleted, ${fail} failed`,
     syncFailed: (msg: string) => `Sync failed: ${msg}`,
     downloadFailed: (msg: string) => `Download failed: ${msg}`,
     uploadFailed: (msg: string) => `Upload failed: ${msg}`,
     listFailed: (msg: string) => `List files failed: ${msg}`,
+    deleteFailed: (msg: string) => `Delete failed: ${msg}`,
     errorDetails: 'Error details',
     moreErrors: (count: number) => `...and ${count} more errors`,
     settingsTitle: 'R2 sync',
@@ -57,6 +72,22 @@ const en = {
     autoSyncDesc: 'Enable automatic sync',
     syncInterval: 'Sync interval',
     syncIntervalDesc: 'Auto sync interval in minutes',
+    syncOnSave: 'Sync on save',
+    syncOnSaveDesc: 'Automatically sync when file is saved',
+    syncStrategy: 'Sync strategy',
+    syncStrategyDesc: 'Choose how to handle sync conflicts',
+    strategyBidirectional: 'Bidirectional',
+    strategyBidirectionalDesc: 'Sync both ways, track deletions',
+    strategyUploadOnly: 'Upload only',
+    strategyUploadOnlyDesc: 'Only upload local files to R2',
+    strategyDownloadOnly: 'Download only',
+    strategyDownloadOnlyDesc: 'Only download R2 files to local',
+    strategyLocalFirst: 'Local first',
+    strategyLocalFirstDesc: 'Local files take priority on conflict',
+    strategyRemoteFirst: 'Remote first',
+    strategyRemoteFirstDesc: 'Remote files take priority on conflict',
+    syncImages: 'Sync images',
+    syncImagesDesc: 'Also sync image files (png, jpg, gif, webp, svg, etc.)',
     testConn: 'Test connection',
     testConnDesc: 'Test R2 connection',
     testConnBtn: 'Test connection',
@@ -80,13 +111,17 @@ const zh = {
     syncFolderNotExist: '同步文件夹不存在',
     connSuccess: (count: number) => `连接成功！存储桶中有 ${count} 个 .md 文件`,
     connFailed: (msg: string) => `连接失败: ${msg}`,
+    uploading: '正在上传文件到 R2...',
+    downloading: '正在从 R2 下载文件...',
+    syncing: '正在同步文件...',
     uploadComplete: (ok: number, fail: number) => `上传完成: ${ok} 个成功, ${fail} 个失败`,
     downloadComplete: (ok: number, fail: number) => `下载完成: ${ok} 个成功, ${fail} 个失败`,
-    syncComplete: (up: number, down: number, fail: number) => `同步完成: 上传 ${up} 个, 下载 ${down} 个, ${fail} 个失败`,
+    syncComplete: (up: number, down: number, del: number, fail: number) => `同步完成: 上传 ${up} 个, 下载 ${down} 个, 删除 ${del} 个, ${fail} 个失败`,
     syncFailed: (msg: string) => `同步失败: ${msg}`,
     downloadFailed: (msg: string) => `下载失败: ${msg}`,
     uploadFailed: (msg: string) => `上传失败: ${msg}`,
     listFailed: (msg: string) => `列出文件失败: ${msg}`,
+    deleteFailed: (msg: string) => `删除失败: ${msg}`,
     errorDetails: '错误详情',
     moreErrors: (count: number) => `...还有 ${count} 个错误`,
     settingsTitle: 'R2 同步',
@@ -104,6 +139,22 @@ const zh = {
     autoSyncDesc: '启用自动同步',
     syncInterval: '同步间隔',
     syncIntervalDesc: '自动同步间隔（分钟）',
+    syncOnSave: '保存时同步',
+    syncOnSaveDesc: '文件保存时自动同步',
+    syncStrategy: '同步策略',
+    syncStrategyDesc: '选择如何处理同步冲突',
+    strategyBidirectional: '双向同步',
+    strategyBidirectionalDesc: '双向同步，跟踪删除操作',
+    strategyUploadOnly: '仅上传',
+    strategyUploadOnlyDesc: '仅上传本地文件到 R2',
+    strategyDownloadOnly: '仅下载',
+    strategyDownloadOnlyDesc: '仅下载 R2 文件到本地',
+    strategyLocalFirst: '本地优先',
+    strategyLocalFirstDesc: '冲突时本地文件优先',
+    strategyRemoteFirst: '远程优先',
+    strategyRemoteFirstDesc: '冲突时远程文件优先',
+    syncImages: '同步图片',
+    syncImagesDesc: '同时同步图片文件（png、jpg、gif、webp、svg 等）',
     testConn: '测试连接',
     testConnDesc: '测试 R2 连接',
     testConnBtn: '测试连接',
@@ -140,6 +191,14 @@ export default class R2SyncPlugin extends Plugin {
         this.addRibbonIcon('cloud', t(this.settings.language).ribbonTitle, () => {
             void this.sync();
         });
+
+        this.registerEvent(
+            this.app.vault.on('modify', (file) => {
+                if (file instanceof TFile && this.settings.syncOnSave && this.shouldSyncFile(file)) {
+                    void this.syncFile(file);
+                }
+            })
+        );
     }
 
     onunload() {
@@ -253,21 +312,24 @@ export default class R2SyncPlugin extends Plugin {
             return;
         }
 
-        const files = this.getAllMdFiles(folder);
+        const syncingNotice = new Notice(i18n.uploading, 0);
+
+        const files = this.getAllSyncFiles(folder);
         let uploaded = 0;
         const errors: string[] = [];
 
         for (const file of files) {
             try {
-                const content = await this.app.vault.read(file);
                 const relativePath = this.getRelativePath(file.path);
-                await this.uploadToR2(relativePath, content);
+                await this.uploadFileToR2(file, relativePath);
                 uploaded++;
             } catch (e) {
                 const errorMsg = e instanceof Error ? e.message : String(e);
                 errors.push(`${file.path}: ${errorMsg}`);
             }
         }
+
+        syncingNotice.hide();
 
         const failed = errors.length;
         let message = i18n.uploadComplete(uploaded, failed);
@@ -287,6 +349,8 @@ export default class R2SyncPlugin extends Plugin {
             return;
         }
 
+        const syncingNotice = new Notice(i18n.downloading, 0);
+
         try {
             const files = await this.listR2Files();
             let downloaded = 0;
@@ -294,15 +358,15 @@ export default class R2SyncPlugin extends Plugin {
 
             for (const key of files) {
                 try {
-                    const content = await this.downloadFromR2(key);
-                    const localPath = this.getLocalPath(key);
-                    await this.saveFile(localPath, content);
+                    await this.downloadFileFromR2(key);
                     downloaded++;
                 } catch (e) {
                     const errorMsg = e instanceof Error ? e.message : String(e);
                     errors.push(`${key}: ${errorMsg}`);
                 }
             }
+
+            syncingNotice.hide();
 
             const failed = errors.length;
             let message = i18n.downloadComplete(downloaded, failed);
@@ -314,6 +378,7 @@ export default class R2SyncPlugin extends Plugin {
             }
             new Notice(message, 10000);
         } catch (e) {
+            syncingNotice.hide();
             const errorMsg = e instanceof Error ? e.message : String(e);
             new Notice(i18n.downloadFailed(errorMsg), 10000);
         }
@@ -326,45 +391,174 @@ export default class R2SyncPlugin extends Plugin {
             return;
         }
 
+        const syncingNotice = new Notice(i18n.syncing, 0);
+
         try {
-            const localFiles = this.getAllMdFiles(this.getSyncFolder()!);
+            const folder = this.getSyncFolder();
+            if (!folder) {
+                syncingNotice.hide();
+                new Notice(i18n.syncFolderNotExist);
+                return;
+            }
+
+            const localFiles = this.getAllSyncFiles(folder);
             const remoteFiles = await this.listR2Files();
             
             const localPaths = new Set(localFiles.map(f => this.getRelativePath(f.path)));
             const remotePaths = new Set(remoteFiles);
+            const previouslySynced = new Set(this.settings.syncedFiles);
 
             let uploaded = 0;
             let downloaded = 0;
+            let deleted = 0;
             const errors: string[] = [];
+            const newSyncedFiles: string[] = [];
 
-            for (const file of localFiles) {
-                const relativePath = this.getRelativePath(file.path);
-                if (!remotePaths.has(relativePath)) {
-                    try {
-                        const content = await this.app.vault.read(file);
-                        await this.uploadToR2(relativePath, content);
-                        uploaded++;
-                    } catch (e) {
-                        const errorMsg = e instanceof Error ? e.message : String(e);
-                        errors.push(`Upload ${relativePath}: ${errorMsg}`);
+            switch (this.settings.syncStrategy) {
+                case 'upload-only':
+                    for (const file of localFiles) {
+                        const relativePath = this.getRelativePath(file.path);
+                        newSyncedFiles.push(relativePath);
+                        try {
+                            await this.uploadFileToR2(file, relativePath);
+                            uploaded++;
+                        } catch (e) {
+                            const errorMsg = e instanceof Error ? e.message : String(e);
+                            errors.push(`Upload ${relativePath}: ${errorMsg}`);
+                        }
                     }
-                }
+                    break;
+
+                case 'download-only':
+                    for (const key of remoteFiles) {
+                        newSyncedFiles.push(key);
+                        try {
+                            await this.downloadFileFromR2(key);
+                            downloaded++;
+                        } catch (e) {
+                            const errorMsg = e instanceof Error ? e.message : String(e);
+                            errors.push(`Download ${key}: ${errorMsg}`);
+                        }
+                    }
+                    break;
+
+                case 'local-first':
+                    for (const file of localFiles) {
+                        const relativePath = this.getRelativePath(file.path);
+                        newSyncedFiles.push(relativePath);
+                        try {
+                            await this.uploadFileToR2(file, relativePath);
+                            uploaded++;
+                        } catch (e) {
+                            const errorMsg = e instanceof Error ? e.message : String(e);
+                            errors.push(`Upload ${relativePath}: ${errorMsg}`);
+                        }
+                    }
+                    for (const key of remoteFiles) {
+                        if (!localPaths.has(key)) {
+                            newSyncedFiles.push(key);
+                            try {
+                                await this.downloadFileFromR2(key);
+                                downloaded++;
+                            } catch (e) {
+                                const errorMsg = e instanceof Error ? e.message : String(e);
+                                errors.push(`Download ${key}: ${errorMsg}`);
+                            }
+                        }
+                    }
+                    break;
+
+                case 'remote-first':
+                    for (const key of remoteFiles) {
+                        newSyncedFiles.push(key);
+                        try {
+                            await this.downloadFileFromR2(key);
+                            downloaded++;
+                        } catch (e) {
+                            const errorMsg = e instanceof Error ? e.message : String(e);
+                            errors.push(`Download ${key}: ${errorMsg}`);
+                        }
+                    }
+                    for (const file of localFiles) {
+                        const relativePath = this.getRelativePath(file.path);
+                        if (!remotePaths.has(relativePath)) {
+                            newSyncedFiles.push(relativePath);
+                            try {
+                                await this.uploadFileToR2(file, relativePath);
+                                uploaded++;
+                            } catch (e) {
+                                const errorMsg = e instanceof Error ? e.message : String(e);
+                                errors.push(`Upload ${relativePath}: ${errorMsg}`);
+                            }
+                        }
+                    }
+                    break;
+
+                case 'bidirectional':
+                default:
+                    for (const file of localFiles) {
+                        const relativePath = this.getRelativePath(file.path);
+                        newSyncedFiles.push(relativePath);
+                        
+                        if (!remotePaths.has(relativePath)) {
+                            try {
+                                await this.uploadFileToR2(file, relativePath);
+                                uploaded++;
+                            } catch (e) {
+                                const errorMsg = e instanceof Error ? e.message : String(e);
+                                errors.push(`Upload ${relativePath}: ${errorMsg}`);
+                            }
+                        }
+                    }
+
+                    for (const key of remoteFiles) {
+                        if (!localPaths.has(key)) {
+                            if (previouslySynced.has(key)) {
+                                try {
+                                    await this.deleteFromR2(key);
+                                    deleted++;
+                                } catch (e) {
+                                    const errorMsg = e instanceof Error ? e.message : String(e);
+                                    errors.push(`Delete remote ${key}: ${errorMsg}`);
+                                    newSyncedFiles.push(key);
+                                }
+                            } else {
+                                try {
+                                    await this.downloadFileFromR2(key);
+                                    downloaded++;
+                                    newSyncedFiles.push(key);
+                                } catch (e) {
+                                    const errorMsg = e instanceof Error ? e.message : String(e);
+                                    errors.push(`Download ${key}: ${errorMsg}`);
+                                }
+                            }
+                        }
+                    }
+
+                    for (const prevFile of previouslySynced) {
+                        if (!remotePaths.has(prevFile) && !localPaths.has(prevFile)) {
+                            const localPath = this.getLocalPath(prevFile);
+                            const file = this.app.vault.getAbstractFileByPath(localPath);
+                            if (file instanceof TFile) {
+                                try {
+                                    await this.app.fileManager.trashFile(file);
+                                    deleted++;
+                                } catch (e) {
+                                    const errorMsg = e instanceof Error ? e.message : String(e);
+                                    errors.push(`Delete local ${prevFile}: ${errorMsg}`);
+                                }
+                            }
+                        }
+                    }
+                    break;
             }
 
-            for (const key of remoteFiles) {
-                if (!localPaths.has(key)) {
-                    try {
-                        const content = await this.downloadFromR2(key);
-                        await this.saveFile(this.getLocalPath(key), content);
-                        downloaded++;
-                    } catch (e) {
-                        const errorMsg = e instanceof Error ? e.message : String(e);
-                        errors.push(`Download ${key}: ${errorMsg}`);
-                    }
-                }
-            }
+            this.settings.syncedFiles = newSyncedFiles;
+            await this.saveSettings();
 
-            let message = i18n.syncComplete(uploaded, downloaded, errors.length);
+            syncingNotice.hide();
+
+            let message = i18n.syncComplete(uploaded, downloaded, deleted, errors.length);
             if (errors.length > 0) {
                 message += `\n\n${i18n.errorDetails}:\n${errors.slice(0, 5).join('\n')}`;
                 if (errors.length > 5) {
@@ -373,8 +567,34 @@ export default class R2SyncPlugin extends Plugin {
             }
             new Notice(message, 10000);
         } catch (e) {
+            syncingNotice.hide();
             const errorMsg = e instanceof Error ? e.message : String(e);
             new Notice(i18n.syncFailed(errorMsg), 10000);
+        }
+    }
+
+    async syncFile(file: TFile): Promise<void> {
+        if (!this.isConfigured()) {
+            return;
+        }
+
+        const syncFolder = this.settings.syncFolder || '';
+        if (syncFolder && !file.path.startsWith(syncFolder + '/') && file.path !== syncFolder) {
+            return;
+        }
+
+        try {
+            const relativePath = this.getRelativePath(file.path);
+            await this.uploadFileToR2(file, relativePath);
+            
+            if (!this.settings.syncedFiles.includes(relativePath)) {
+                this.settings.syncedFiles.push(relativePath);
+                await this.saveSettings();
+            }
+        } catch (e) {
+            const i18n = t(this.settings.language);
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            new Notice(i18n.uploadFailed(`${file.path}: ${errorMsg}`), 5000);
         }
     }
 
@@ -384,6 +604,28 @@ export default class R2SyncPlugin extends Plugin {
         }
         const folder = this.app.vault.getAbstractFileByPath(this.settings.syncFolder);
         return folder instanceof TFolder ? folder : null;
+    }
+
+    isImageFile(file: TFile): boolean {
+        return IMAGE_EXTENSIONS.includes(file.extension.toLowerCase());
+    }
+
+    shouldSyncFile(file: TFile): boolean {
+        if (file.extension === 'md') return true;
+        if (this.settings.syncImages && this.isImageFile(file)) return true;
+        return false;
+    }
+
+    getAllSyncFiles(folder: TFolder): TFile[] {
+        const files: TFile[] = [];
+        for (const child of folder.children) {
+            if (child instanceof TFile && this.shouldSyncFile(child)) {
+                files.push(child);
+            } else if (child instanceof TFolder) {
+                files.push(...this.getAllSyncFiles(child));
+            }
+        }
+        return files;
     }
 
     getAllMdFiles(folder: TFolder): TFile[] {
@@ -529,6 +771,146 @@ export default class R2SyncPlugin extends Plugin {
         }
     }
 
+    async uploadFileToR2(file: TFile, relativePath: string): Promise<void> {
+        const i18n = t(this.settings.language);
+        const isImage = this.isImageFile(file);
+        
+        if (isImage) {
+            const arrayBuffer = await this.app.vault.readBinary(file);
+            const { url, headers } = await this.createSignatureForBinary('PUT', relativePath, arrayBuffer.byteLength);
+            
+            const contentType = this.getContentType(file.extension);
+            
+            try {
+                const response = await requestUrl({
+                    url,
+                    method: 'PUT',
+                    headers: {
+                        ...headers,
+                        'content-type': contentType
+                    },
+                    body: arrayBuffer
+                });
+
+                if (response.status < 200 || response.status >= 300) {
+                    throw new Error(i18n.uploadFailed(`${response.status} - ${response.text}`));
+                }
+            } catch (e) {
+                if (e instanceof Error) throw e;
+                throw new Error(i18n.uploadFailed(String(e)));
+            }
+        } else {
+            const content = await this.app.vault.read(file);
+            await this.uploadToR2(relativePath, content);
+        }
+    }
+
+    async downloadFileFromR2(key: string): Promise<void> {
+        const i18n = t(this.settings.language);
+        const isImage = IMAGE_EXTENSIONS.some(ext => key.toLowerCase().endsWith(`.${ext}`));
+        const localPath = this.getLocalPath(key);
+        
+        const { url, headers } = await this.createSignature('GET', key, '');
+        
+        try {
+            const response = await requestUrl({
+                url,
+                method: 'GET',
+                headers,
+                arrayBuffer: isImage
+            });
+
+            if (response.status < 200 || response.status >= 300) {
+                throw new Error(i18n.downloadFailed(`${response.status} - ${response.text}`));
+            }
+
+            if (isImage) {
+                await this.saveBinaryFile(localPath, response.arrayBuffer);
+            } else {
+                await this.saveFile(localPath, response.text);
+            }
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            throw new Error(i18n.downloadFailed(String(e)));
+        }
+    }
+
+    getContentType(extension: string): string {
+        const contentTypes: Record<string, string> = {
+            'png': 'image/png',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'svg': 'image/svg+xml',
+            'bmp': 'image/bmp',
+            'ico': 'image/x-icon'
+        };
+        return contentTypes[extension.toLowerCase()] || 'application/octet-stream';
+    }
+
+    async saveBinaryFile(path: string, data: ArrayBuffer): Promise<void> {
+        const dir = path.substring(0, path.lastIndexOf('/'));
+        if (dir) {
+            await this.app.vault.createFolder(dir).catch(() => {});
+        }
+        
+        const existing = this.app.vault.getAbstractFileByPath(path);
+        if (existing instanceof TFile) {
+            await this.app.vault.modifyBinary(existing, data);
+        } else {
+            await this.app.vault.createBinary(path, data);
+        }
+    }
+
+    async createSignatureForBinary(method: string, objectKey: string, contentLength: number): Promise<{ headers: Record<string, string>; url: string }> {
+        const region = 'us-east-1';
+        const service = 's3';
+        const host = this.getEndpointHost();
+        const bucket = this.settings.bucketName;
+        
+        const now = new Date();
+        const amzDate = this.getAmzDate(now);
+        const dateStamp = amzDate.substring(0, 8);
+        
+        const algorithm = 'AWS4-HMAC-SHA256';
+        const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+        
+        const bodyHash = 'UNSIGNED-PAYLOAD';
+        
+        const encodedKey = this.uriEncode(objectKey, false);
+        const canonicalUri = `/${bucket}/${encodedKey}`;
+        const canonicalQueryString = '';
+        const canonicalHeaders = `host:${host}\nx-amz-content-sha256:${bodyHash}\nx-amz-date:${amzDate}\n`;
+        const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+        
+        const canonicalRequest = `${method}\n${canonicalUri}\n${canonicalQueryString}\n${canonicalHeaders}\n${signedHeaders}\n${bodyHash}`;
+        const canonicalRequestHash = await this.sha256(canonicalRequest);
+        
+        const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`;
+        
+        const kSecret = new TextEncoder().encode(`AWS4${this.settings.secretAccessKey}`);
+        const kDate = await this.hmacSha256(kSecret, dateStamp);
+        const kRegion = await this.hmacSha256(kDate, region);
+        const kService = await this.hmacSha256(kRegion, service);
+        const kSigning = await this.hmacSha256(kService, 'aws4_request');
+        const signature = this.arrayBufferToHex((await this.hmacSha256(kSigning, stringToSign)).buffer);
+        
+        const credential = `${this.settings.accessKeyId}/${credentialScope}`;
+        const authorization = `${algorithm} Credential=${credential}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+        
+        const url = `${this.getBaseUrl()}/${bucket}/${encodedKey}`;
+        
+        return {
+            url,
+            headers: {
+                'x-amz-date': amzDate,
+                'x-amz-content-sha256': bodyHash,
+                'authorization': authorization
+            }
+        };
+    }
+
     async downloadFromR2(key: string): Promise<string> {
         const i18n = t(this.settings.language);
         const { url, headers } = await this.createSignature('GET', key, '');
@@ -548,6 +930,26 @@ export default class R2SyncPlugin extends Plugin {
         } catch (e) {
             if (e instanceof Error) throw e;
             throw new Error(i18n.downloadFailed(String(e)));
+        }
+    }
+
+    async deleteFromR2(key: string): Promise<void> {
+        const i18n = t(this.settings.language);
+        const { url, headers } = await this.createSignature('DELETE', key, '');
+        
+        try {
+            const response = await requestUrl({
+                url,
+                method: 'DELETE',
+                headers
+            });
+
+            if (response.status < 200 || response.status >= 300) {
+                throw new Error(i18n.deleteFailed(`${response.status} - ${response.text}`));
+            }
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            throw new Error(i18n.deleteFailed(String(e)));
         }
     }
 
@@ -611,8 +1013,11 @@ export default class R2SyncPlugin extends Plugin {
             const keyRegex = /<Key>([^<]+)<\/Key>/g;
             let match;
             while ((match = keyRegex.exec(xml)) !== null) {
-                if (match[1].endsWith('.md')) {
-                    keys.push(match[1]);
+                const key = match[1];
+                if (key.endsWith('.md')) {
+                    keys.push(key);
+                } else if (this.settings.syncImages && IMAGE_EXTENSIONS.some(ext => key.toLowerCase().endsWith(`.${ext}`))) {
+                    keys.push(key);
                 }
             }
             return keys;
@@ -736,6 +1141,41 @@ class R2SyncSettingTab extends PluginSettingTab {
                             this.plugin.startAutoSync();
                         }
                     }
+                }));
+
+        new Setting(containerEl)
+            .setName(i18n.syncOnSave)
+            .setDesc(i18n.syncOnSaveDesc)
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.syncOnSave)
+                .onChange(async (value) => {
+                    this.plugin.settings.syncOnSave = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName(i18n.syncStrategy)
+            .setDesc(i18n.syncStrategyDesc)
+            .addDropdown(dropdown => dropdown
+                .addOption('bidirectional', i18n.strategyBidirectional)
+                .addOption('upload-only', i18n.strategyUploadOnly)
+                .addOption('download-only', i18n.strategyDownloadOnly)
+                .addOption('local-first', i18n.strategyLocalFirst)
+                .addOption('remote-first', i18n.strategyRemoteFirst)
+                .setValue(this.plugin.settings.syncStrategy)
+                .onChange(async (value: SyncStrategy) => {
+                    this.plugin.settings.syncStrategy = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName(i18n.syncImages)
+            .setDesc(i18n.syncImagesDesc)
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.syncImages)
+                .onChange(async (value) => {
+                    this.plugin.settings.syncImages = value;
+                    await this.plugin.saveSettings();
                 }));
 
         new Setting(containerEl)
