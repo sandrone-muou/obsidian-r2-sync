@@ -1,0 +1,78 @@
+.r2-sync-analyze-modal {
+    max-width: 600px;
+}
+
+.r2-sync-summary {
+    padding: 10px;
+    background: var(--background-secondary);
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+.r2-sync-summary p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.r2-sync-no-diff {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-success);
+    font-size: 16px;
+}
+
+.r2-sync-section {
+    margin-bottom: 15px;
+}
+
+.r2-sync-section h3 {
+    margin: 10px 0 5px 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.r2-sync-file-list {
+    max-height: 150px;
+    overflow-y: auto;
+    margin: 0;
+    padding-left: 20px;
+    font-size: 12px;
+    background: var(--background-secondary);
+    border-radius: 5px;
+    padding: 10px 10px 10px 25px;
+}
+
+.r2-sync-file-list li {
+    margin: 3px 0;
+    word-break: break-all;
+}
+
+.r2-sync-local-only h3 {
+    color: var(--text-success);
+}
+
+.r2-sync-remote-only h3 {
+    color: var(--text-accent);
+}
+
+.r2-sync-deleted h3 {
+    color: var(--text-error);
+}
+
+.r2-sync-both h3 {
+    color: var(--text-muted);
+}
+
+.r2-sync-both .r2-sync-file-list {
+    max-height: 100px;
+    opacity: 0.7;
+}
+
+.r2-sync-modal-buttons {
+    margin-top: 20px;
+    text-align: right;
+}
+
+.r2-sync-modal-buttons button {
+    margin-left: 10px;
+}

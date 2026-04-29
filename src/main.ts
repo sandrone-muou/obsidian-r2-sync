@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice, TFile, TFolder, requestUrl } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, Notice, TFile, TFolder, requestUrl, Modal } from 'obsidian';
 
 type Language = 'en' | 'zh';
 type SyncStrategy = 'bidirectional' | 'upload-only' | 'download-only' | 'local-first' | 'remote-first';
@@ -40,6 +40,7 @@ const en = {
     cmdUpload: 'Upload all files to R2',
     cmdDownload: 'Download all files from R2',
     cmdSync: 'Bidirectional sync',
+    cmdAnalyze: 'Analyze sync differences',
     configFirst: 'Please configure R2 storage settings first',
     syncFolderNotExist: 'Sync folder does not exist',
     connSuccess: (count: number) => `Connection successful! ${count} .md files in bucket`,
@@ -47,6 +48,7 @@ const en = {
     uploading: 'Uploading files to R2...',
     downloading: 'Downloading files from R2...',
     syncing: 'Syncing files...',
+    analyzing: 'Analyzing file differences...',
     uploadComplete: (ok: number, fail: number) => `Upload complete: ${ok} succeeded, ${fail} failed`,
     downloadComplete: (ok: number, fail: number) => `Download complete: ${ok} succeeded, ${fail} failed`,
     syncComplete: (up: number, down: number, del: number, fail: number) => `Sync complete: ${up} uploaded, ${down} downloaded, ${del} deleted, ${fail} failed`,
@@ -57,6 +59,14 @@ const en = {
     deleteFailed: (msg: string) => `Delete failed: ${msg}`,
     errorDetails: 'Error details',
     moreErrors: (count: number) => `...and ${count} more errors`,
+    analyzeTitle: 'Sync Analysis',
+    analyzeLocalOnly: 'Local only (need upload)',
+    analyzeRemoteOnly: 'Remote only (need download)',
+    analyzeBoth: 'Both sides (synced)',
+    analyzeDeleted: 'Deleted (will be removed)',
+    analyzeNoDiff: 'No differences found. All files are in sync.',
+    analyzeSummary: (local: number, remote: number, upload: number, download: number, deleted: number) => 
+        `Local: ${local} files | Remote: ${remote} files | To upload: ${upload} | To download: ${download} | To delete: ${deleted}`,
     settingsTitle: 'R2 sync',
     bucketName: 'Bucket name',
     bucketNameDesc: 'Cloudflare R2 bucket name',
@@ -96,6 +106,7 @@ const en = {
     uploadAllBtn: 'Upload all',
     downloadAllBtn: 'Download all',
     syncBtn: 'Sync',
+    analyzeBtn: 'Analyze',
     language: 'Language',
     languageDesc: 'Interface language',
     languageEn: 'English',
@@ -107,6 +118,7 @@ const zh = {
     cmdUpload: '上传所有文件到 R2',
     cmdDownload: '从 R2 下载所有文件',
     cmdSync: '双向同步',
+    cmdAnalyze: '分析同步差异',
     configFirst: '请先配置 R2 存储信息',
     syncFolderNotExist: '同步文件夹不存在',
     connSuccess: (count: number) => `连接成功！存储桶中有 ${count} 个 .md 文件`,
@@ -114,6 +126,7 @@ const zh = {
     uploading: '正在上传文件到 R2...',
     downloading: '正在从 R2 下载文件...',
     syncing: '正在同步文件...',
+    analyzing: '正在分析文件差异...',
     uploadComplete: (ok: number, fail: number) => `上传完成: ${ok} 个成功, ${fail} 个失败`,
     downloadComplete: (ok: number, fail: number) => `下载完成: ${ok} 个成功, ${fail} 个失败`,
     syncComplete: (up: number, down: number, del: number, fail: number) => `同步完成: 上传 ${up} 个, 下载 ${down} 个, 删除 ${del} 个, ${fail} 个失败`,
@@ -124,6 +137,14 @@ const zh = {
     deleteFailed: (msg: string) => `删除失败: ${msg}`,
     errorDetails: '错误详情',
     moreErrors: (count: number) => `...还有 ${count} 个错误`,
+    analyzeTitle: '同步分析',
+    analyzeLocalOnly: '仅本地（需上传）',
+    analyzeRemoteOnly: '仅远程（需下载）',
+    analyzeBoth: '双方都有（已同步）',
+    analyzeDeleted: '已删除（将被移除）',
+    analyzeNoDiff: '未发现差异，所有文件已同步。',
+    analyzeSummary: (local: number, remote: number, upload: number, download: number, deleted: number) => 
+        `本地: ${local} 个文件 | 远程: ${remote} 个文件 | 待上传: ${upload} | 待下载: ${download} | 待删除: ${deleted}`,
     settingsTitle: 'R2 同步',
     bucketName: '存储桶名称',
     bucketNameDesc: 'Cloudflare R2 存储桶名称',
@@ -163,6 +184,7 @@ const zh = {
     uploadAllBtn: '上传全部',
     downloadAllBtn: '下载全部',
     syncBtn: '同步',
+    analyzeBtn: '分析',
     language: '语言',
     languageDesc: '界面语言',
     languageEn: '英文',
@@ -236,6 +258,14 @@ export default class R2SyncPlugin extends Plugin {
             name: i18n.cmdSync,
             callback: () => {
                 void this.sync();
+            }
+        });
+
+        this.addCommand({
+            id: 'analyze',
+            name: i18n.cmdAnalyze,
+            callback: () => {
+                void this.analyzeDiff();
             }
         });
     }
@@ -568,6 +598,76 @@ export default class R2SyncPlugin extends Plugin {
             new Notice(message, 10000);
         } catch (e) {
             syncingNotice.hide();
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            new Notice(i18n.syncFailed(errorMsg), 10000);
+        }
+    }
+
+    async analyzeDiff() {
+        const i18n = t(this.settings.language);
+        if (!this.isConfigured()) {
+            new Notice(i18n.configFirst);
+            return;
+        }
+
+        const analyzingNotice = new Notice(i18n.analyzing, 0);
+
+        try {
+            const folder = this.getSyncFolder();
+            if (!folder) {
+                analyzingNotice.hide();
+                new Notice(i18n.syncFolderNotExist);
+                return;
+            }
+
+            const localFiles = this.getAllSyncFiles(folder);
+            const remoteFiles = await this.listR2Files();
+            
+            const localPaths = new Set(localFiles.map(f => this.getRelativePath(f.path)));
+            const remotePaths = new Set(remoteFiles);
+            const previouslySynced = new Set(this.settings.syncedFiles);
+
+            const localOnly: string[] = [];
+            const remoteOnly: string[] = [];
+            const both: string[] = [];
+            const deleted: string[] = [];
+
+            for (const path of localPaths) {
+                if (remotePaths.has(path)) {
+                    both.push(path);
+                } else {
+                    localOnly.push(path);
+                }
+            }
+
+            for (const path of remotePaths) {
+                if (!localPaths.has(path)) {
+                    remoteOnly.push(path);
+                }
+            }
+
+            for (const path of previouslySynced) {
+                if (!localPaths.has(path) && remotePaths.has(path)) {
+                    deleted.push(path);
+                }
+            }
+
+            analyzingNotice.hide();
+
+            new AnalyzeModal(
+                this.app,
+                i18n,
+                {
+                    localOnly,
+                    remoteOnly,
+                    both,
+                    deleted,
+                    localCount: localPaths.size,
+                    remoteCount: remotePaths.size
+                }
+            ).open();
+        } catch (e) {
+            analyzingNotice.hide();
             const errorMsg = e instanceof Error ? e.message : String(e);
             new Notice(i18n.syncFailed(errorMsg), 10000);
         }
@@ -1204,6 +1304,99 @@ class R2SyncSettingTab extends PluginSettingTab {
                 .setButtonText(i18n.syncBtn)
                 .onClick(() => {
                     void this.plugin.sync();
+                }))
+            .addButton(btn => btn
+                .setButtonText(i18n.analyzeBtn)
+                .onClick(() => {
+                    void this.plugin.analyzeDiff();
                 }));
+    }
+}
+
+interface AnalyzeResult {
+    localOnly: string[];
+    remoteOnly: string[];
+    both: string[];
+    deleted: string[];
+    localCount: number;
+    remoteCount: number;
+}
+
+class AnalyzeModal extends Modal {
+    private i18n: typeof en;
+    private result: AnalyzeResult;
+
+    constructor(app: App, i18n: typeof en, result: AnalyzeResult) {
+        super(app);
+        this.i18n = i18n;
+        this.result = result;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.addClass('r2-sync-analyze-modal');
+
+        contentEl.createEl('h2', { text: this.i18n.analyzeTitle });
+
+        const summary = contentEl.createDiv({ cls: 'r2-sync-summary' });
+        summary.createEl('p', {
+            text: this.i18n.analyzeSummary(
+                this.result.localCount,
+                this.result.remoteCount,
+                this.result.localOnly.length,
+                this.result.remoteOnly.length,
+                this.result.deleted.length
+            )
+        });
+
+        const hasDiff = this.result.localOnly.length > 0 || 
+                        this.result.remoteOnly.length > 0 || 
+                        this.result.deleted.length > 0;
+
+        if (!hasDiff) {
+            contentEl.createEl('p', {
+                text: this.i18n.analyzeNoDiff,
+                cls: 'r2-sync-no-diff'
+            });
+        } else {
+            if (this.result.localOnly.length > 0) {
+                this.createSection(contentEl, this.i18n.analyzeLocalOnly, this.result.localOnly, 'local-only');
+            }
+
+            if (this.result.remoteOnly.length > 0) {
+                this.createSection(contentEl, this.i18n.analyzeRemoteOnly, this.result.remoteOnly, 'remote-only');
+            }
+
+            if (this.result.deleted.length > 0) {
+                this.createSection(contentEl, this.i18n.analyzeDeleted, this.result.deleted, 'deleted');
+            }
+        }
+
+        if (this.result.both.length > 0) {
+            this.createSection(contentEl, this.i18n.analyzeBoth, this.result.both, 'both');
+        }
+
+        const buttonContainer = contentEl.createDiv({ cls: 'r2-sync-modal-buttons' });
+        buttonContainer.createEl('button', {
+            text: 'Close',
+            cls: 'mod-cta'
+        }).addEventListener('click', () => {
+            this.close();
+        });
+    }
+
+    createSection(container: HTMLElement, title: string, items: string[], cls: string) {
+        const section = container.createDiv({ cls: `r2-sync-section r2-sync-${cls}` });
+        section.createEl('h3', { text: `${title} (${items.length})` });
+        
+        const list = section.createEl('ul', { cls: 'r2-sync-file-list' });
+        for (const item of items) {
+            list.createEl('li', { text: item });
+        }
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
     }
 }

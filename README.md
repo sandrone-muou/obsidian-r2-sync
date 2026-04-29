@@ -16,6 +16,7 @@ An Obsidian plugin for multi-device synchronization using Cloudflare R2.
 - 📥 **Download Files** - Download files from R2 bucket to local
 - 🔄 **Bidirectional Sync** - Automatically detect local and remote differences for two-way sync
 - 🗑️ **Delete Sync** - Track file deletions and sync them across devices
+- 🔍 **Sync Analysis** - Analyze differences between local and remote files before syncing
 - ⏰ **Auto Sync** - Support for setting automatic sync intervals
 - 💾 **Sync on Save** - Automatically sync when file is saved
 - 📁 **Folder Sync** - Option to sync specific folders or the entire vault
@@ -90,6 +91,7 @@ Click "Test Connection" button to verify configuration.
 - **Upload All Files**: Upload all local files to R2
 - **Download All Files**: Download all files from R2 to local
 - **Bidirectional Sync**: Smart sync, only upload/download files with differences
+- **Analyze**: View differences between local and remote files
 
 #### Command Palette
 
@@ -97,6 +99,7 @@ Use `Ctrl+P` to open command palette, available commands:
 - `Upload all files to R2`
 - `Download all files from R2`
 - `Bidirectional sync`
+- `Analyze sync differences`
 
 #### Ribbon Icon
 
@@ -132,6 +135,7 @@ MIT License
 - 📥 **下载文件** - 从 R2 存储桶下载文件到本地
 - 🔄 **双向同步** - 自动检测本地和远程差异，进行双向同步
 - 🗑️ **删除同步** - 跟踪文件删除并在设备间同步删除操作
+- 🔍 **同步分析** - 在同步前分析本地和远程文件的差异
 - ⏰ **自动同步** - 支持设置自动同步间隔
 - 💾 **保存时同步** - 文件保存时自动同步
 - 📁 **文件夹同步** - 可选择同步特定文件夹或整个仓库
@@ -206,6 +210,7 @@ MIT License
 - **上传所有文件**：将本地所有文件上传到 R2
 - **下载所有文件**：从 R2 下载所有文件到本地
 - **双向同步**：智能同步，只上传/下载有差异的文件
+- **分析**：查看本地和远程文件的差异
 
 #### 命令面板
 
@@ -213,6 +218,7 @@ MIT License
 - `上传所有文件到 R2`
 - `从 R2 下载所有文件`
 - `双向同步`
+- `分析同步差异`
 
 #### 功能区图标
 
@@ -237,6 +243,21 @@ MIT License
 ---
 
 ## Changelog
+
+### v1.2.0
+
+#### New Features
+- **Sync Analysis**: Analyze differences between local and remote files before syncing
+  - View files that exist only locally (need upload)
+  - View files that exist only remotely (need download)
+  - View deleted files that will be removed from remote
+  - View files that exist on both sides (already synced)
+  - Summary with file counts and sync actions needed
+
+#### Improvements
+- Added "Analyze" button in settings for quick access
+- Added "Analyze sync differences" command to command palette
+- New modal dialog for displaying analysis results with color-coded categories
 
 ### v1.1.0
 
