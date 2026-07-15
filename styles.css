@@ -76,3 +76,40 @@
 .r2-sync-modal-buttons button {
     margin-left: 10px;
 }
+
+.r2-sync-file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.r2-sync-checkbox {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.r2-sync-file-name {
+    word-break: break-all;
+}
+
+.r2-sync-action-bar {
+    margin-bottom: 15px;
+}
+
+.r2-sync-action-bar button {
+    margin-right: 10px;
+    padding: 4px 12px;
+    font-size: 12px;
+}
+
+.r2-sync-btn-upload {
+    background-color: var(--interactive-success);
+}
+
+.r2-sync-btn-download {
+    background-color: var(--interactive-accent);
+}
+
+.r2-sync-btn-delete {
+    background-color: var(--interactive-failure);
+}

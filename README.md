@@ -14,25 +14,20 @@ An Obsidian plugin for multi-device synchronization using Cloudflare R2.
 
 - 📤 **Upload Files** - Upload local Markdown files to R2 bucket
 - 📥 **Download Files** - Download files from R2 bucket to local
-- 🔄 **Bidirectional Sync** - Automatically detect local and remote differences for two-way sync
+- 🔄 **Bidirectional Sync** - Automatically detect local and remote differences for two-way sync, now with mtime-based change detection
 - 🗑️ **Delete Sync** - Track file deletions and sync them across devices
-- 🔍 **Sync Analysis** - Analyze differences between local and remote files before syncing
-- ⏰ **Auto Sync** - Support for setting automatic sync intervals
-- 💾 **Sync on Save** - Automatically sync when file is saved
+- 🔍 **Sync Analysis** - Analyze differences between local and remote files before syncing, with selective upload/download/delete
+- ⏰ **Auto Sync** - Support for setting automatic sync intervals with mutex protection to prevent concurrent syncs
+- 💾 **Sync on Save** - Automatically sync when file is saved (with loop prevention)
 - 📁 **Folder Sync** - Option to sync specific folders or the entire vault
 - 🖼️ **Image Sync** - Support for syncing image files (png, jpg, gif, webp, svg, etc.)
 - 🌐 **Multi-language** - Support for English and Chinese interface
-- 📊 **Sync Strategies** - Multiple sync strategies to choose from
-- ⏳ **Sync Progress** - Visual feedback during sync operations
+- 📊 **Sync Strategies** - Multiple sync strategies to choose from, with correct conflict resolution for local-first and remote-first
+- 📄 **Right-click Upload** - Upload individual files via the file explorer context menu
+- ⌨️ **Upload Current File** - Command palette command to quickly upload the active file
+- 📦 **Pagination Support** - Handles buckets with more than 1000 files
 
 ### Installation
-
-#### From Community Market (Recommended)
-
-1. Open Obsidian Settings
-2. Go to "Community plugins"
-3. Search for "R2 Sync"
-4. Click Install and Enable
 
 #### Manual Installation
 
@@ -100,6 +95,7 @@ Use `Ctrl+P` to open command palette, available commands:
 - `Download all files from R2`
 - `Bidirectional sync`
 - `Analyze sync differences`
+- `Upload current file to R2`
 
 #### Ribbon Icon
 
@@ -133,25 +129,20 @@ MIT License
 
 - 📤 **上传文件** - 将本地 Markdown 文件上传到 R2 存储桶
 - 📥 **下载文件** - 从 R2 存储桶下载文件到本地
-- 🔄 **双向同步** - 自动检测本地和远程差异，进行双向同步
+- 🔄 **双向同步** - 自动检测本地和远程差异进行双向同步，支持基于修改时间的变更检测
 - 🗑️ **删除同步** - 跟踪文件删除并在设备间同步删除操作
-- 🔍 **同步分析** - 在同步前分析本地和远程文件的差异
-- ⏰ **自动同步** - 支持设置自动同步间隔
-- 💾 **保存时同步** - 文件保存时自动同步
+- 🔍 **同步分析** - 在同步前分析本地和远程文件的差异，支持选择性上传/下载/删除
+- ⏰ **自动同步** - 支持设置自动同步间隔，带互斥锁防止并发同步
+- 💾 **保存时同步** - 文件保存时自动同步（带循环触发防护）
 - 📁 **文件夹同步** - 可选择同步特定文件夹或整个仓库
 - 🖼️ **图片同步** - 支持同步图片文件（png、jpg、gif、webp、svg 等）
 - 🌐 **多语言** - 支持中英文界面
-- 📊 **同步策略** - 多种同步策略可选
-- ⏳ **同步进度** - 同步过程中显示进度提示
+- 📊 **同步策略** - 多种同步策略可选，本地优先/远程优先策略正确处理冲突
+- 📄 **右键上传** - 通过文件管理器右键菜单上传单个文件
+- ⌨️ **上传当前文件** - 命令面板命令快速上传当前活动文件
+- 📦 **分页支持** - 支持存储桶中超过 1000 个文件的场景
 
 ### 安装
-
-#### 从社区市场安装（推荐）
-
-1. 打开 Obsidian 设置
-2. 进入「社区插件」
-3. 搜索「R2 Sync」
-4. 点击安装并启用
 
 #### 手动安装
 
@@ -219,6 +210,7 @@ MIT License
 - `从 R2 下载所有文件`
 - `双向同步`
 - `分析同步差异`
+- `上传当前文件到 R2`
 
 #### 功能区图标
 
@@ -243,6 +235,28 @@ MIT License
 ---
 
 ## Changelog
+
+### v1.3.0
+
+#### New Features
+- **Upload Current File**: New command palette command to quickly upload the active file
+- **Right-click Upload**: Upload individual files via the file explorer context menu
+- **Sync Analysis with Actions**: Enhanced analysis modal with selectable files and batch upload/download/delete actions
+- **Pagination Support**: `listR2Files()` now handles buckets with more than 1000 files via S3 pagination
+
+#### Bug Fixes
+- **Sync Mutex**: Added `isSyncing` flag to prevent concurrent sync operations (auto sync, manual sync, save-on-sync could previously run simultaneously)
+- **Save-on-Save Loop Fix**: Fixed infinite sync loop where downloading a file would trigger `modify` event → `syncFile()` → re-upload. Now tracks recently-downloaded files and skips them for 5 seconds
+- **Bidirectional Sync Change Detection**: Files that exist on both sides are now checked via `mtime`. Local modifications are properly uploaded to R2 instead of being silently ignored
+- **Sync Mark Logic**: Files are no longer added to `syncedFiles` if their upload/download failed
+- **Conflict Strategy Fix**: `local-first` now correctly uploads all local files (overwriting remote), and `remote-first` correctly downloads all remote files (overwriting local)
+- **Analyze Diff "Deleted" Category**: Fixed incorrect logic where "deleted" files were actually "remote-only". Now properly separates newly-added remote files from previously-synced then-deleted files
+
+#### Improvements
+- Migrated `syncedFileMtimes` tracking for more accurate change detection
+- Improved folder boundary checks in `isSyncableFile()` and `syncFile()`
+- Code now fully synchronized between `src/main.ts` source and `main.js` build output
+- Passes ESLint with zero errors and zero warnings
 
 ### v1.2.0
 
